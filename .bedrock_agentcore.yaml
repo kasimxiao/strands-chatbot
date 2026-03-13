@@ -30,7 +30,7 @@ agents:
     bedrock_agentcore:
       agent_id: smart_home_assistant-nBHKspHdLI
       agent_arn: arn:aws:bedrock-agentcore:us-east-1:671067840733:runtime/smart_home_assistant-nBHKspHdLI
-      agent_session_id: null
+      agent_session_id: a389f360-43c9-4eba-bed2-00c1be595937
     codebuild:
       project_name: null
       execution_role: null
