@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能客服系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .chat-container {
+            height: calc(100vh - 280px);
+        }
+        .message-enter {
+            animation: messageIn 0.3s ease-out;
+        }
+        @keyframes messageIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .typing-indicator span {
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+        .device-card {
+            transition: all 0.3s ease;
+        }
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .device-on {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        }
+        .device-off {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        }
+        .device-update {
+            animation: devicePulse 0.5s ease-out;
+        }
+        @keyframes devicePulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <!-- 头部 -->
+        <header class="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                        <i class="fas fa-robot text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">智能客服系统</h1>
+                        <p class="text-sm text-gray-500">AWS Bedrock AgentCore Runtime</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- 用户选择器 -->
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm text-gray-600">用户ID:</label>
+                        <select id="userSelect" class="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="user_001">用户 001</option>
+                            <option value="user_002">用户 002</option>
+                            <option value="user_003">用户 003</option>
+                            <option value="guest">访客</option>
+                        </select>
+                        <input type="text" id="customUserId" placeholder="自定义ID"
+                               class="border rounded-lg px-3 py-2 text-sm w-32 focus:ring-2 focus:ring-blue-500">
+                        <button onclick="switchUser()" class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition">
+                            切换
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左侧：聊天区域 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <!-- 聊天头部 -->
+                    <div class="bg-gradient-to-r from-blue-500 to-blue-600 p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-user text-white"></i>
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium" id="currentUserDisplay">user_001</p>
+                                    <p class="text-blue-100 text-xs" id="sessionIdDisplay">Session: --</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="newSession()" class="bg-white/20 text-white px-3 py-1 rounded-lg text-sm hover:bg-white/30 transition" title="新会话">
+                                    <i class="fas fa-plus mr-1"></i>新会话
+                                </button>
+                                <button onclick="clearMemory()" class="bg-white/20 text-white px-3 py-1 rounded-lg text-sm hover:bg-white/30 transition">
+                                    <i class="fas fa-trash mr-1"></i>清除记录
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 聊天消息区域 -->
+                    <div id="chatContainer" class="chat-container overflow-y-auto p-4 space-y-4 bg-gray-50">
+                        <div class="text-center text-gray-400 py-8">
+                            <i class="fas fa-comments text-4xl mb-2"></i>
+                            <p>开始与智能客服对话</p>
+                        </div>
+                    </div>
+
+                    <!-- 输入区域 -->
+                    <div class="border-t p-4 bg-white">
+                        <div class="flex space-x-3">
+                            <input type="text" id="messageInput" placeholder="输入消息... 试试「打开客厅灯」"
+                                   class="flex-1 border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   onkeypress="if(event.key === 'Enter') sendMessage()">
+                            <button onclick="sendMessage()" id="sendBtn"
+                                    class="bg-blue-500 text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition flex items-center space-x-2">
+                                <i class="fas fa-paper-plane"></i>
+                                <span>发送</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：状态面板 -->
+            <div class="space-y-6">
+                <!-- 设备控制 -->
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                        设备控制
+                        <span id="deviceSyncIndicator" class="ml-2 text-xs text-green-500 hidden">
+                            <i class="fas fa-sync fa-spin"></i> 同步中
+                        </span>
+                    </h3>
+                    <div id="deviceGrid" class="grid grid-cols-2 gap-3">
+                        <!-- 设备卡片由 JS 渲染 -->
+                    </div>
+                    <!-- 场景模式 -->
+                    <div class="mt-4 pt-4 border-t">
+                        <p class="text-sm text-gray-600 mb-2">场景模式</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="setScene('日间')" class="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full hover:bg-yellow-200">日间</button>
+                            <button onclick="setScene('夜间')" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-200">夜间</button>
+                            <button onclick="setScene('阅读')" class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200">阅读</button>
+                            <button onclick="setScene('影院')" class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full hover:bg-purple-200">影院</button>
+                            <button onclick="setScene('全关')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-200">全关</button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        通过聊天控制设备，面板会自动同步
+                    </p>
+                </div>
+
+                <!-- 快捷问题 -->
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-bolt text-yellow-500 mr-2"></i>
+                        快捷命令
+                    </h3>
+                    <div class="space-y-2">
+                        <button onclick="quickSend('打开客厅灯')" class="w-full text-left text-sm bg-gray-50 hover:bg-gray-100 px-3 py-2 rounded-lg transition">
+                            <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>打开客厅灯
+                        </button>
+                        <button onclick="quickSend('设置为影院模式')" class="w-full text-left text-sm bg-gray-50 hover:bg-gray-100 px-3 py-2 rounded-lg transition">
+                            <i class="fas fa-film text-purple-500 mr-2"></i>设置为影院模式
+                        </button>
+                        <button onclick="quickSend('EC2 有哪些实例类型？')" class="w-full text-left text-sm bg-gray-50 hover:bg-gray-100 px-3 py-2 rounded-lg transition">
+                            <i class="fas fa-cloud text-blue-500 mr-2"></i>EC2 实例类型
+                        </button>
+                        <button onclick="quickSend('扫地机器人充不进电怎么办？')" class="w-full text-left text-sm bg-gray-50 hover:bg-gray-100 px-3 py-2 rounded-lg transition">
+                            <i class="fas fa-robot text-green-500 mr-2"></i>扫地机故障排查
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 活跃用户 -->
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-users text-green-500 mr-2"></i>
+                        活跃用户
+                    </h3>
+                    <div id="activeUsers" class="space-y-2">
+                        <!-- 用户列表由 JS 渲染 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 配置
+        const API_BASE = 'http://localhost:8000';
+        let currentUserId = 'user_001';
+        let isLoading = false;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            switchUser();
+            loadDevices();
+            loadActiveUsers();
+        });
+
+        // 切换用户
+        async function switchUser() {
+            const select = document.getElementById('userSelect');
+            const custom = document.getElementById('customUserId').value.trim();
+            currentUserId = custom || select.value;
+
+            document.getElementById('currentUserDisplay').textContent = currentUserId;
+            document.getElementById('chatContainer').innerHTML = `
+                <div class="text-center text-gray-400 py-8">
+                    <i class="fas fa-spinner fa-spin text-4xl mb-2"></i>
+                    <p>加载中...</p>
+                </div>
+            `;
+
+            try {
+                // 获取用户历史
+                const historyRes = await fetch(`${API_BASE}/users/${currentUserId}/history`);
+                const historyData = await historyRes.json();
+
+                // 获取记忆信息
+                const memoryRes = await fetch(`${API_BASE}/users/${currentUserId}/memory`);
+                const memoryData = await memoryRes.json();
+
+                document.getElementById('sessionIdDisplay').textContent = `Session: ${memoryData.session_id.slice(0, 8)}...`;
+
+                // 渲染历史消息
+                const container = document.getElementById('chatContainer');
+                if (historyData.history && historyData.history.length > 0) {
+                    container.innerHTML = '';
+                    historyData.history.forEach(msg => {
+                        addMessageToUI(msg.role, msg.content, false);
+                    });
+                } else {
+                    container.innerHTML = `
+                        <div class="text-center text-gray-400 py-8">
+                            <i class="fas fa-comments text-4xl mb-2"></i>
+                            <p>开始与智能客服对话</p>
+                            <p class="text-sm mt-2">试试说「打开客厅灯」或「设置为影院模式」</p>
+                        </div>
+                    `;
+                }
+
+                loadActiveUsers();
+                loadDevices();
+            } catch (error) {
+                console.error('加载用户数据失败:', error);
+                document.getElementById('chatContainer').innerHTML = `
+                    <div class="text-center text-red-400 py-8">
+                        <i class="fas fa-exclamation-triangle text-4xl mb-2"></i>
+                        <p>无法连接到服务器</p>
+                        <p class="text-sm mt-2">请确保后端 API 正在运行</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message || isLoading) return;
+
+            input.value = '';
+            isLoading = true;
+            document.getElementById('sendBtn').disabled = true;
+
+            // 清除欢迎消息
+            const container = document.getElementById('chatContainer');
+            if (container.querySelector('.text-center')) {
+                container.innerHTML = '';
+            }
+
+            // 添加用户消息
+            addMessageToUI('user', message);
+
+            // 创建助手消息容器（用于流式更新）
+            const assistantMsgId = 'msg-' + Date.now();
+            addStreamMessageToUI(assistantMsgId);
+
+            try {
+                const response = await fetch(`${API_BASE}/chat/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentUserId, message })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            let data = line.slice(6);
+
+                            // 检测设备变化通知
+                            if (data === '[DEVICE_CHANGED]') {
+                                console.log('检测到设备状态变化，刷新面板...');
+                                showDeviceSyncIndicator();
+                                await loadDevices(true);  // 带动画刷新
+                                continue;
+                            }
+
+                            if (data === '[DONE]') {
+                                break;
+                            }
+
+                            // 解码转义的换行符
+                            data = data.replace(/\\n/g, '\n');
+                            fullText += data;
+                            updateStreamMessage(assistantMsgId, fullText);
+                        }
+                    }
+                }
+            } catch (error) {
+                updateStreamMessage(assistantMsgId, '抱歉，发生错误：' + error.message);
+            }
+
+            isLoading = false;
+            document.getElementById('sendBtn').disabled = false;
+        }
+
+        // 快捷发送
+        function quickSend(message) {
+            document.getElementById('messageInput').value = message;
+            sendMessage();
+        }
+
+        // 添加消息到 UI
+        function addMessageToUI(role, content, animate = true) {
+            const container = document.getElementById('chatContainer');
+            const isUser = role === 'user';
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'} ${animate ? 'message-enter' : ''}`;
+
+            messageDiv.innerHTML = `
+                <div class="flex items-start space-x-2 max-w-[80%] ${isUser ? 'flex-row-reverse space-x-reverse' : ''}">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-blue-500' : 'bg-gray-200'}">
+                        <i class="fas ${isUser ? 'fa-user' : 'fa-robot'} ${isUser ? 'text-white' : 'text-gray-600'} text-sm"></i>
+                    </div>
+                    <div class="${isUser ? 'bg-blue-500 text-white' : 'bg-white'} rounded-2xl px-4 py-3 shadow-sm">
+                        <p class="text-sm whitespace-pre-wrap">${escapeHtml(content)}</p>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 添加流式消息容器
+        function addStreamMessageToUI(msgId) {
+            const container = document.getElementById('chatContainer');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.id = msgId;
+            messageDiv.className = 'flex justify-start message-enter';
+
+            messageDiv.innerHTML = `
+                <div class="flex items-start space-x-2 max-w-[80%]">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-200">
+                        <i class="fas fa-robot text-gray-600 text-sm"></i>
+                    </div>
+                    <div class="bg-white rounded-2xl px-4 py-3 shadow-sm">
+                        <p class="text-sm whitespace-pre-wrap stream-content">
+                            <span class="typing-indicator inline-flex space-x-1">
+                                <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                                <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                                <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 更新流式消息内容
+        function updateStreamMessage(msgId, content) {
+            const msgDiv = document.getElementById(msgId);
+            if (msgDiv) {
+                const contentEl = msgDiv.querySelector('.stream-content');
+                if (contentEl) {
+                    contentEl.textContent = content;
+                }
+                document.getElementById('chatContainer').scrollTop = document.getElementById('chatContainer').scrollHeight;
+            }
+        }
+
+        // 新会话
+        async function newSession() {
+            try {
+                await fetch(`${API_BASE}/users/${currentUserId}/new-session`, { method: 'POST' });
+                switchUser();
+            } catch (error) {
+                alert('创建新会话失败: ' + error.message);
+            }
+        }
+
+        // 清除记录
+        async function clearMemory() {
+            if (!confirm('确定要清除该用户的对话记录吗？')) return;
+            try {
+                await fetch(`${API_BASE}/users/${currentUserId}/memory`, { method: 'DELETE' });
+                switchUser();
+            } catch (error) {
+                alert('清除记录失败: ' + error.message);
+            }
+        }
+
+        // ============ 设备控制 ============
+
+        // 显示设备同步指示器
+        function showDeviceSyncIndicator() {
+            const indicator = document.getElementById('deviceSyncIndicator');
+            indicator.classList.remove('hidden');
+            setTimeout(() => {
+                indicator.classList.add('hidden');
+            }, 1500);
+        }
+
+        // 加载设备状态
+        async function loadDevices(animate = false) {
+            try {
+                const res = await fetch(`${API_BASE}/devices`);
+                const data = await res.json();
+                renderDevices(data.devices, animate);
+            } catch (error) {
+                console.error('加载设备失败:', error);
+            }
+        }
+
+        // 渲染设备
+        function renderDevices(devices, animate = false) {
+            const grid = document.getElementById('deviceGrid');
+            grid.innerHTML = '';
+
+            const deviceNames = {
+                'living_room_light': { name: '客厅灯', icon: 'fa-couch', loc: '客厅' },
+                'bedroom_light': { name: '卧室灯', icon: 'fa-bed', loc: '卧室' },
+                'kitchen_light': { name: '厨房灯', icon: 'fa-utensils', loc: '厨房' },
+                'bathroom_light': { name: '浴室灯', icon: 'fa-bath', loc: '浴室' },
+            };
+
+            for (const [id, device] of Object.entries(devices)) {
+                const info = deviceNames[id] || { name: device.name, icon: 'fa-lightbulb', loc: id };
+                const isOn = device.status === 'on';
+
+                const card = document.createElement('div');
+                card.className = `device-card rounded-xl p-3 cursor-pointer ${isOn ? 'device-on' : 'device-off'} ${animate ? 'device-update' : ''}`;
+                card.onclick = () => toggleDevice(info.loc, isOn);
+
+                card.innerHTML = `
+                    <div class="flex flex-col items-center text-white">
+                        <i class="fas ${info.icon} text-2xl mb-2"></i>
+                        <span class="text-xs font-medium">${info.name}</span>
+                        ${isOn ? `<span class="text-xs opacity-75 mt-1">${device.brightness}%</span>` : ''}
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            }
+        }
+
+        // 切换设备（手动点击）
+        async function toggleDevice(location, currentlyOn) {
+            try {
+                const endpoint = currentlyOn ? 'off' : 'on';
+                await fetch(`${API_BASE}/devices/${location}/${endpoint}`, { method: 'POST' });
+                loadDevices(true);
+            } catch (error) {
+                console.error('控制设备失败:', error);
+            }
+        }
+
+        // 设置场景（手动点击）
+        async function setScene(scene) {
+            try {
+                await fetch(`${API_BASE}/devices/scene/${scene}`, { method: 'POST' });
+                loadDevices(true);
+            } catch (error) {
+                console.error('设置场景失败:', error);
+            }
+        }
+
+        // ============ 用户管理 ============
+
+        // 加载活跃用户
+        async function loadActiveUsers() {
+            try {
+                const res = await fetch(`${API_BASE}/users`);
+                const data = await res.json();
+                renderActiveUsers(data.users);
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+            }
+        }
+
+        // 渲染活跃用户
+        function renderActiveUsers(users) {
+            const container = document.getElementById('activeUsers');
+
+            if (users.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400 text-center">暂无活跃用户</p>';
+                return;
+            }
+
+            container.innerHTML = users.map(user => `
+                <div class="flex items-center justify-between p-2 rounded-lg ${user.user_id === currentUserId ? 'bg-blue-50' : 'hover:bg-gray-50'} cursor-pointer"
+                     onclick="selectUser('${user.user_id}')">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-6 h-6 rounded-full ${user.user_id === currentUserId ? 'bg-blue-500' : 'bg-gray-300'} flex items-center justify-center">
+                            <i class="fas fa-user text-white text-xs"></i>
+                        </div>
+                        <span class="text-sm ${user.user_id === currentUserId ? 'text-blue-600 font-medium' : 'text-gray-600'}">${user.user_id}</span>
+                    </div>
+                    <span class="text-xs text-gray-400">${user.message_count} 条</span>
+                </div>
+            `).join('');
+        }
+
+        // 选择用户
+        function selectUser(userId) {
+            document.getElementById('customUserId').value = userId;
+            switchUser();
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
