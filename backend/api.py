@@ -64,8 +64,8 @@ def parse_device_actions(response: str) -> list[dict]:
     # 匹配开灯: 多种表达方式 (位置只匹配:客厅/卧室/厨房/浴室)
     location_pattern = r"(客厅|卧室|厨房|浴室)"
     on_patterns = [
-        rf"已(?:为您)?打开{location_pattern}灯",
-        rf"{location_pattern}灯已(?:为您|经)?打开",
+        rf"已(?:为您)?(?:成功)?打开{location_pattern}灯",
+        rf"{location_pattern}灯已(?:为您|经|成功)?打开",
         rf"打开了{location_pattern}灯",
         rf"为您打开{location_pattern}灯",
     ]
@@ -78,8 +78,8 @@ def parse_device_actions(response: str) -> list[dict]:
 
     # 匹配关灯: 多种表达方式
     off_patterns = [
-        rf"已(?:为您)?关闭{location_pattern}灯",
-        rf"{location_pattern}灯已(?:为您|经)?关闭",
+        rf"已(?:为您)?(?:成功)?关闭{location_pattern}灯",
+        rf"{location_pattern}灯已(?:为您|经|成功)?关闭",
         rf"关闭了{location_pattern}灯",
     ]
 
